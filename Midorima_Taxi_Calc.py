@@ -152,7 +152,7 @@ if not df_all.empty:
     else:
         st.info("本日の記録はまだありません。")
 
-    with st.expander("🕒 直近5件의 履歴・取り消し"):
+    with st.expander("🕒 直近5件 履歴・取り消し"):
         recent = df_all.tail(5).iloc[::-1]
         for idx, row in recent.iterrows():
             c_left, c_right = st.columns([4, 1])
