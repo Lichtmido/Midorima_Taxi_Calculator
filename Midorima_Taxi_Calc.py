@@ -11,10 +11,10 @@ GITHUB_REPO = "Lichtmido/Midorima_Taxi_Calculator"
 CSV_FILE = "taxi_log.csv"
 TOKEN = st.secrets["GH_TOKEN"]
 
-# 定数
+# 定数（デフォルト値）
 DEFAULT_UNIT_PRICE = 20000.0  # 1km単価 (2.0万)
 DEFAULT_PICKUP_FEE = 10000.0  # 配車手数料 (1.0万)
-FIRST_RIDE_FEE = 10000.0      # 初乗り運賃 (1.0万)
+DEFAULT_FIRST_FEE = 10000.0   # 初乗り運賃 (1.0万)
 
 st.set_page_config(page_title="緑間タクシー専用料金計算機 Pro", layout="centered")
 
@@ -42,19 +42,22 @@ st.title("🚖 緑間タクシー専用料金計算機")
 # 電話対応・案内用カンペ
 with st.container(border=True):
     st.info("📞 電話対応ガイド")
-    st.write("「基本1km2万円です。」")
+    st.write("「基本1km2万円です。状況に合わせて調整も可能です！」")
 
 # ドライバー選択
 driver = st.radio("担当ドライバー", ["緑間理人", "緑間きのこ"], horizontal=True)
 
-# 料金設定
+# 料金設定（セッションステートで管理）
 if 'unit_price' not in st.session_state:
     st.session_state.unit_price = DEFAULT_UNIT_PRICE
 if 'pickup_fee' not in st.session_state:
     st.session_state.pickup_fee = DEFAULT_PICKUP_FEE
+if 'first_fee' not in st.session_state:
+    st.session_state.first_fee = DEFAULT_FIRST_FEE
 
 with st.expander("⚙️ 料金設定の一時変更"):
     st.info("※ここで変更しても、アプリを再読み込みすると初期値に戻ります。")
+    st.session_state.first_fee = st.number_input("初乗り運賃 (円)", value=st.session_state.first_fee, step=1000.0)
     st.session_state.unit_price = st.number_input("1km単価 (円)", value=st.session_state.unit_price, step=1000.0)
     st.session_state.pickup_fee = st.number_input("配車手数料 (円)", value=st.session_state.pickup_fee, step=500.0)
 
@@ -84,16 +87,16 @@ with col2:
 # オプション切り替え
 c1, c2 = st.columns(2)
 with c1:
-    use_first_ride = st.toggle(f"初乗り運賃 ({int(FIRST_RIDE_FEE):,}円)", value=True)
+    use_first_ride = st.toggle(f"初乗り運賃 ({int(st.session_state.first_fee):,}円) を適用", value=True)
 with c2:
-    use_pickup_fee = st.toggle(f"配車手数料 ({int(st.session_state.pickup_fee):,}円)", value=True)
+    use_pickup_fee = st.toggle(f"配車手数料 ({int(st.session_state.pickup_fee):,}円) を適用", value=True)
 
-# 理人さん式・新計算ロジック
+# 計算ロジック
 total_distance_all = pickup_dist + real_dist
 billable_dist = max(0.0, total_distance_all - current_slip_limit)
 
 fare_meter = billable_dist * st.session_state.unit_price
-applied_first_ride = FIRST_RIDE_FEE if use_first_ride else 0
+applied_first_ride = st.session_state.first_fee if use_first_ride else 0
 applied_pickup_fee = st.session_state.pickup_fee if use_pickup_fee else 0
 total_fare = applied_first_ride + fare_meter + applied_pickup_fee
 
@@ -103,7 +106,7 @@ st.markdown(f"### 💰 合計請求金額:  **{int(total_fare):,} 円**")
 # 領収書テキスト生成
 details = []
 if use_first_ride:
-    details.append(f"初乗り{int(FIRST_RIDE_FEE):,}円")
+    details.append(f"初乗り{int(st.session_state.first_fee):,}円")
 if fare_meter > 0:
     details.append(f"走行分{int(fare_meter):,}円")
 if use_pickup_fee:
@@ -167,7 +170,7 @@ with st.expander("詳細な内部計算"):
     st.write(f"エリア設定リミット: {current_slip_limit} km")
     st.write(f"総移動距離: {total_distance_all:.2f} km")
     st.write(f"課金対象距離: {billable_dist:.2f} km")
-    st.write(f"初乗り適用: {'ON' if use_first_ride else 'OFF'}")
+    st.write(f"適用初乗り額: {int(applied_first_ride):,} 円")
 
 st.divider()
 st.caption(f"設定: 単価{int(st.session_state.unit_price):,}円 / 無料範囲 {current_slip_limit}km")
