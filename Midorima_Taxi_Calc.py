@@ -15,7 +15,6 @@ TOKEN = st.secrets["GH_TOKEN"]
 DEFAULT_UNIT_PRICE = 20000.0  # 1km単価 (2.0万)
 DEFAULT_PICKUP_FEE = 10000.0  # 配車手数料 (1.0万)
 FIRST_RIDE_FEE = 10000.0      # 初乗り運賃 (1.0万)
-# FIRST_RIDE_DIST (スリップリミット) は動的に変更するため定数から除外
 
 st.set_page_config(page_title="緑間タクシー専用料金計算機 Pro", layout="centered")
 
@@ -40,7 +39,7 @@ def save_to_github(df, sha, message):
 # メイン画面
 st.title("🚖 緑間タクシー専用料金計算機")
 
-# 電話対応・案内用カンペ（追記）
+# 電話対応・案内用カンペ
 with st.container(border=True):
     st.info("📞 電話対応ガイド")
     st.write("「基本1km2万円です。お迎えはエリアに応じて数kmサービスしてます！」")
@@ -61,7 +60,7 @@ with st.expander("⚙️ 料金設定の一時変更"):
 
 st.divider()
 
-# エリア別スリップリミット設定（追記）
+# エリア別スリップリミット設定
 area_mode = st.selectbox(
     "📍 お迎え・走行エリア（無料範囲の選択）",
     ["都会 ⇆ 都会 (2km無料)", "都会 ⇆ 田舎 (5km無料)", "超遠距離/パレト (10km無料)", "カスタム設定"]
@@ -82,26 +81,35 @@ with col1:
 with col2:
     real_dist = st.number_input("② 実車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
 
-use_pickup_fee = st.toggle(f"配車手数料 ({int(st.session_state.pickup_fee):,}円) を適用", value=True)
+# オプション切り替え
+c1, c2 = st.columns(2)
+with c1:
+    use_first_ride = st.toggle(f"初乗り運賃 ({int(FIRST_RIDE_FEE):,}円)", value=True)
+with c2:
+    use_pickup_fee = st.toggle(f"配車手数料 ({int(st.session_state.pickup_fee):,}円)", value=True)
 
-# 計算ロジック
+# 理人さん式・新計算ロジック
 total_distance_all = pickup_dist + real_dist
 billable_dist = max(0.0, total_distance_all - current_slip_limit)
 
-fare_meter = (billable_dist / 0.05) * 1000 # 50m単位で計算（キロ2万と同義）
+fare_meter = (billable_dist / 0.05) * 1000 # 50m単位
+applied_first_ride = FIRST_RIDE_FEE if use_first_ride else 0
 applied_pickup_fee = st.session_state.pickup_fee if use_pickup_fee else 0
-total_fare = FIRST_RIDE_FEE + fare_meter + applied_pickup_fee
+total_fare = applied_first_ride + fare_meter + applied_pickup_fee
 
 st.divider()
 st.markdown(f"### 💰 合計請求金額:  **{int(total_fare):,} 円**")
 
 # 領収書テキスト生成
-receipt = f"【タクシー領収書】合計:{int(total_fare):,}円 (内訳:初乗り{int(FIRST_RIDE_FEE):,}円"
+details = []
+if use_first_ride:
+    details.append(f"初乗り{int(FIRST_RIDE_FEE):,}円")
 if fare_meter > 0:
-    receipt += f"＋走行分{int(fare_meter):,}円"
+    details.append(f"走行分{int(fare_meter):,}円")
 if use_pickup_fee:
-    receipt += f"＋配車料{int(applied_pickup_fee):,}円"
-receipt += f" / 担当:{driver})"
+    details.append(f"配車料{int(applied_pickup_fee):,}円")
+
+receipt = f"【タクシー領収書】合計:{int(total_fare):,}円 (内訳:" + "＋".join(details) + f" / 担当:{driver})"
 
 st.text_input("チャット用コピー（スマホなら長押し）", value=receipt)
 
@@ -144,7 +152,7 @@ if not df_all.empty:
     else:
         st.info("本日の記録はまだありません。")
 
-    with st.expander("🕒 直近5件の履歴・取り消し"):
+    with st.expander("🕒 直近5件의 履歴・取り消し"):
         recent = df_all.tail(5).iloc[::-1]
         for idx, row in recent.iterrows():
             c_left, c_right = st.columns([4, 1])
@@ -154,11 +162,12 @@ if not df_all.empty:
                 save_to_github(df_all, sha_latest, f"Delete log at {row['timestamp']}")
                 st.rerun()
 
-# 内部計算の詳細（デバッグ用）
+# 内部計算の詳細
 with st.expander("詳細な内部計算"):
     st.write(f"エリア設定リミット: {current_slip_limit} km")
-    st.write(f"総移動距離 (迎車+実車): {total_distance_all:.2f} km")
-    st.write(f"課金対象距離 (総距離 - リミット): {billable_dist:.2f} km")
+    st.write(f"総移動距離: {total_distance_all:.2f} km")
+    st.write(f"課金対象距離: {billable_dist:.2f} km")
+    st.write(f"初乗り適用: {'ON' if use_first_ride else 'OFF'}")
 
 st.divider()
-st.caption(f"現在の設定: 単価{int(st.session_state.unit_price):,}円 / 無料範囲 {current_slip_limit}km")
+st.caption(f"設定: 単価{int(st.session_state.unit_price):,}円 / 無料範囲 {current_slip_limit}km")
