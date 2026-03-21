@@ -42,7 +42,7 @@ st.title("🚖 緑間タクシー専用料金計算機")
 # 電話対応・案内用カンペ
 with st.container(border=True):
     st.info("📞 電話対応ガイド")
-    st.write("「基本1km2万円です。お迎えはエリアに応じて数kmサービスしてます！」")
+    st.write("「基本1km2万円です。」")
 
 # ドライバー選択
 driver = st.radio("担当ドライバー", ["緑間理人", "緑間きのこ"], horizontal=True)
