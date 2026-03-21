@@ -92,7 +92,7 @@ with c2:
 total_distance_all = pickup_dist + real_dist
 billable_dist = max(0.0, total_distance_all - current_slip_limit)
 
-fare_meter = (billable_dist / 0.05) * 1000 # 50m単位
+fare_meter = billable_dist * st.session_state.unit_price
 applied_first_ride = FIRST_RIDE_FEE if use_first_ride else 0
 applied_pickup_fee = st.session_state.pickup_fee if use_pickup_fee else 0
 total_fare = applied_first_ride + fare_meter + applied_pickup_fee
