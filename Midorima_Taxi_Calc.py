@@ -66,14 +66,14 @@ st.divider()
 # エリア別スリップリミット設定
 area_mode = st.selectbox(
     "📍 お迎え・走行エリア（無料範囲の選択）",
-    ["都会 ⇆ 都会 (2km無料)", "都会 ⇆ 田舎 (5km無料)", "超遠距離/パレト (10km無料)", "カスタム設定"]
+    ["近距離 (2km無料)", "遠距離 (5km無料)", "超遠距離 (10km無料)", "カスタム設定"]
 )
 
-if area_mode == "都会 ⇆ 都会 (2km無料)":
+if area_mode == "近距離 (2km無料)":
     current_slip_limit = 2.0
-elif area_mode == "都会 ⇆ 田舎 (5km無料)":
+elif area_mode == "遠距離 (5km無料)":
     current_slip_limit = 5.0
-elif area_mode == "超遠距離/パレト (10km無料)":
+elif area_mode == "超遠距離 (10km無料)":
     current_slip_limit = 10.0
 else:
     current_slip_limit = st.number_input("自由設定リミット (km)", value=2.0, step=0.5)
