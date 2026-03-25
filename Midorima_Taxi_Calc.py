@@ -36,98 +36,90 @@ def save_to_github(df, sha, message):
     data = {"message": message, "content": content, "sha": sha}
     requests.put(url, headers=headers, json=data)
 
-# --- 料金設定のセッション管理（一時変更用） ---
+# --- 料金設定のセッション管理 ---
 if 'u_price' not in st.session_state: st.session_state.u_price = D_UNIT_PRICE
 if 'p_fee' not in st.session_state: st.session_state.p_fee = D_PICKUP_FEE
 if 'f_fee' not in st.session_state: st.session_state.f_fee = D_FIRST_FEE
 
-# --- メイン画面 ---
 st.title("🚖 緑間タクシー 料金計算機")
-
 driver = st.radio("担当ドライバー", ["緑間理人", "緑間きのこ"], horizontal=True)
 
-# 料金設定の一時変更セクション
 with st.expander("⚙️ 料金単価・手数料の一時設定"):
-    st.info("※リロードすると初期値（2万/1万）に戻ります。")
     st.session_state.u_price = st.number_input("1km単価 (円)", value=st.session_state.u_price, step=1000.0)
     st.session_state.p_fee = st.number_input("配車手数料 (円)", value=st.session_state.p_fee, step=500.0)
     st.session_state.f_fee = st.number_input("初乗り運賃 (円)", value=st.session_state.f_fee, step=500.0)
 
 st.divider()
 
-# 距離入力
 col1, col2 = st.columns(2)
 with col1:
-    pickup_dist = st.number_input("① 迎車距離 (km)", min_value=0.0, step=0.01, format="%.2f", help="10.00kmまで固定、10.01kmからスリップ")
+    pickup_dist = st.number_input("① 迎車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
 with col2:
     real_dist = st.number_input("② 実車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
 
-# オプションスイッチ
-st.write("🔧 手数料・運賃の適用設定")
+st.write("🔧 オプション設定（ボタンOFFでその項目を0円にします）")
 c1, c2 = st.columns(2)
 with c1:
     use_pickup = st.toggle("配車手数料を適用", value=True)
 with c2:
     use_first = st.toggle("初乗り運賃を適用", value=True)
 
-# --- 🚀 理人さん専用・自動判定計算ロジック ---
-# 手数料の適用値を決定
+# --- 🚀 理人さんロジック：モード別の完全書き換え ---
 applied_p_fee = st.session_state.p_fee if use_pickup else 0.0
 applied_f_fee = st.session_state.f_fee if use_first else 0.0
 
+detail_parts = []
+
 if pickup_dist > 10.00:
-    # 【遠距離スリップ】10.01km〜
-    calc_type = "遠距離スリップ（10.01km〜）"
-    # 計算式: (迎車 + 実車 - 10km) × 単価 + 初乗り
+    # 【遠距離スリップ：10.01km〜】
+    # 配車手数料は取らない（適用ボタンがONでも、このモードでは0円扱い）
+    calc_type = "遠距離スリップ適用（10.01km〜）"
     billable_dist = max(0.0, (pickup_dist + real_dist) - 10.0)
     fare_meter = billable_dist * st.session_state.u_price
+    
+    # 遠距離は「距離課金 ＋ 初乗り」のみ
     total_fare = fare_meter + applied_f_fee
-    method_label = f"走行分({billable_dist:.2f}km)"
+    
+    if fare_meter > 0: detail_parts.append(f"スリップ走行({billable_dist:.2f}km)")
+    if use_first: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
 else:
-    # 【近距離固定】〜10.00km
-    calc_type = "近距離固定（〜10.00km）"
-    # 計算式: (実車 × 単価) + 配車手数料
+    # 【近距離固定：〜10.00km】
+    # 配車手数料 ＋ 初乗り運賃 の両方を取る
+    calc_type = "近距離固定適用（〜10.00km）"
     fare_meter = real_dist * st.session_state.u_price
-    total_fare = fare_meter + applied_p_fee
-    method_label = f"実車走行分({real_dist:.2f}km)"
+    
+    # 近距離は「距離課金 ＋ 配車料 ＋ 初乗り」
+    total_fare = fare_meter + applied_p_fee + applied_f_fee
+    
+    if fare_meter > 0: detail_parts.append(f"実車走行({real_dist:.2f}km)")
+    if use_first: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
+    if use_pickup: detail_parts.append(f"配車料{int(applied_p_fee):,}円")
 
 # --- 結果表示 ---
 with st.container(border=True):
     st.write(f"📊 判定結果: **{calc_type}**")
     st.markdown(f"### 💰 合計金額:  **{int(total_fare):,} 円**")
 
-# 領収書テキスト生成
-detail_parts = []
-if fare_meter > 0: detail_parts.append(method_label)
-if use_pickup and pickup_dist <= 10.00: detail_parts.append(f"配車料{int(applied_p_fee):,}円")
-if use_first and pickup_dist > 10.00: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
-
+# 領収書テキスト
 receipt_details = "＋".join(detail_parts) if detail_parts else "基本料金のみ"
 receipt = f"【タクシー領収書】合計:{int(total_fare):,}円 (内訳:{receipt_details} / 担当:{driver})"
+st.text_input("チャット用コピー", value=receipt)
 
-st.text_input("チャット用コピー（スマホ長押し）", value=receipt)
-
-# 保存ボタン
 if st.button(f"🚀 {driver} の実績を記録"):
-    with st.spinner("GitHubに保存中..."):
+    with st.spinner("記録中..."):
         df, sha = get_csv_from_github()
         jst = pytz.timezone('Asia/Tokyo')
         now = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S")
-        new_row = pd.DataFrame([[now, driver, pickup_dist, real_dist, total_fare, receipt]], 
-                                columns=["timestamp", "driver", "pickup_dist", "real_dist", "fare", "details"])
+        new_row = pd.DataFrame([[now, driver, pickup_dist, real_dist, total_fare, receipt]], columns=["timestamp", "driver", "pickup_dist", "real_dist", "fare", "details"])
         df = pd.concat([df, new_row], ignore_index=True)
         save_to_github(df, sha, f"Taxi log by {driver}")
         st.success("日報に記録しました！"); st.rerun()
 
 st.divider()
-with st.expander("🕒 本日の実績・履歴"):
-    df_all, _ = get_csv_from_github()
-    if not df_all.empty:
-        df_all['timestamp'] = pd.to_datetime(df_all['timestamp'])
-        today = datetime.now(pytz.timezone('Asia/Tokyo')).date()
-        df_today = df_all[df_all['timestamp'].dt.date == today]
-        if not df_today.empty:
-            st.metric("今日の総売上", f"{int(df_today['fare'].sum()):,}円")
-            st.table(df_today[['timestamp', 'driver', 'fare']].tail(5))
-        else:
-            st.info("本日のデータはありません。")
+with st.expander("📋 計算の根拠"):
+    if pickup_dist > 10.00:
+        st.write("10km超のため配車手数料は0円として計算します。")
+        st.write(f"式: (({pickup_dist} + {real_dist}) - 10.0) × {st.session_state.u_price} + 初乗り({applied_f_fee})")
+    else:
+        st.write("10km以内のため配車手数料と初乗りを両方加算します。")
+        st.write(f"式: ({real_dist} × {st.session_state.u_price}) + 配車料({applied_p_fee}) + 初乗り({applied_f_fee})")
