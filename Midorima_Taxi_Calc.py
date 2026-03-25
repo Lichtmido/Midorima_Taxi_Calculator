@@ -51,49 +51,58 @@ with st.expander("⚙️ 料金単価・手数料の一時設定"):
 
 st.divider()
 
-col1, col2 = st.columns(2)
-with col1:
-    pickup_dist = st.number_input("① 迎車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
-with col2:
-    real_dist = st.number_input("② 実車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
-
-st.write("🔧 オプション設定（ボタンOFFでその項目を0円にします）")
-c1, c2 = st.columns(2)
-with c1:
-    use_pickup = st.toggle("配車手数料を適用", value=True)
-with c2:
-    use_first = st.toggle("初乗り運賃を適用", value=True)
-
-# --- 🚀 理人さんロジック：モード別の完全書き換え ---
-applied_p_fee = st.session_state.p_fee if use_pickup else 0.0
-applied_f_fee = st.session_state.f_fee if use_first else 0.0
+# --- 新機能：モード選択 ---
+pay_mode = st.toggle("💰 金額を手動で直接入力する", value=False)
 
 detail_parts = []
+total_fare = 0.0
 
-if pickup_dist > 10.00:
-    # 【遠距離スリップ：10.01km〜】
-    # 配車手数料は取らない（適用ボタンがONでも、このモードでは0円扱い）
-    calc_type = "遠距離スリップ適用（10.01km〜）"
-    billable_dist = max(0.0, (pickup_dist + real_dist) - 10.0)
-    fare_meter = billable_dist * st.session_state.u_price
-    
-    # 遠距離は「距離課金 ＋ 初乗り」のみ
-    total_fare = fare_meter + applied_f_fee
-    
-    if fare_meter > 0: detail_parts.append(f"スリップ走行({billable_dist:.2f}km)")
-    if use_first: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
+if pay_mode:
+    # 【手動入力モード】
+    manual_fare = st.number_input("決済金額 (円)", min_value=0, step=10000, value=0)
+    pickup_dist, real_dist = 0.0, 0.0
+    total_fare = float(manual_fare)
+    calc_type = "手動定額決済"
+    detail_parts.append("定額料金")
 else:
-    # 【近距離固定：〜10.00km】
-    # 配車手数料 ＋ 初乗り運賃 の両方を取る
-    calc_type = "近距離固定適用（〜10.00km）"
-    fare_meter = real_dist * st.session_state.u_price
+    # 【通常計算モード（ベースコードのロジック）】
+    col1, col2 = st.columns(2)
+    with col1:
+        pickup_dist = st.number_input("① 迎車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
+    with col2:
+        real_dist = st.number_input("② 実車距離 (km)", min_value=0.0, step=0.01, format="%.2f")
+
+    st.write("🔧 オプション設定（ボタンOFFでその項目を0円にします）")
+    c1, c2 = st.columns(2)
+    with c1:
+        use_pickup = st.toggle("配車手数料を適用", value=True)
+    with c2:
+        use_first = st.toggle("初乗り運賃を適用", value=True)
+
+    # --- チップ入力（通常モード時のみ表示） ---
+    tip_amount = st.number_input("🧧 お気持ち / チップ (円)", min_value=0.0, step=1000.0, format="%.0f")
+
+    # ロジック適用
+    applied_p_fee = st.session_state.p_fee if use_pickup else 0.0
+    applied_f_fee = st.session_state.f_fee if use_first else 0.0
+
+    if pickup_dist > 10.00:
+        calc_type = "遠距離スリップ適用（10.01km〜）"
+        billable_dist = max(0.0, (pickup_dist + real_dist) - 10.0)
+        fare_meter = billable_dist * st.session_state.u_price
+        total_fare = fare_meter + applied_f_fee + tip_amount
+        if fare_meter > 0: detail_parts.append(f"スリップ走行({billable_dist:.2f}km)")
+        if use_first: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
+    else:
+        calc_type = "近距離固定適用（〜10.00km）"
+        fare_meter = real_dist * st.session_state.u_price
+        total_fare = fare_meter + applied_p_fee + applied_f_fee + tip_amount
+        if fare_meter > 0: detail_parts.append(f"実車走行({real_dist:.2f}km)")
+        if use_first: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
+        if use_pickup: detail_parts.append(f"配車料{int(applied_p_fee):,}円")
     
-    # 近距離は「距離課金 ＋ 配車料 ＋ 初乗り」
-    total_fare = fare_meter + applied_p_fee + applied_f_fee
-    
-    if fare_meter > 0: detail_parts.append(f"実車走行({real_dist:.2f}km)")
-    if use_first: detail_parts.append(f"初乗り{int(applied_f_fee):,}円")
-    if use_pickup: detail_parts.append(f"配車料{int(applied_p_fee):,}円")
+    if tip_amount > 0:
+        detail_parts.append(f"お気持ち{int(tip_amount):,}円")
 
 # --- 結果表示 ---
 with st.container(border=True):
@@ -117,9 +126,11 @@ if st.button(f"🚀 {driver} の実績を記録"):
 
 st.divider()
 with st.expander("📋 計算の根拠"):
-    if pickup_dist > 10.00:
+    if pay_mode:
+        st.write("手動入力モードのため、計算式は使用していません。")
+    elif pickup_dist > 10.00:
         st.write("10km超のため配車手数料は0円として計算します。")
-        st.write(f"式: (({pickup_dist} + {real_dist}) - 10.0) × {st.session_state.u_price} + 初乗り({applied_f_fee})")
+        st.write(f"式: (({pickup_dist} + {real_dist}) - 10.0) × {st.session_state.u_price} + 初乗り({applied_f_fee}) + チップ")
     else:
         st.write("10km以内のため配車手数料と初乗りを両方加算します。")
-        st.write(f"式: ({real_dist} × {st.session_state.u_price}) + 配車料({applied_p_fee}) + 初乗り({applied_f_fee})")
+        st.write(f"式: ({real_dist} × {st.session_state.u_price}) + 配車料({applied_p_fee}) + 初乗り({applied_f_fee}) + チップ")
