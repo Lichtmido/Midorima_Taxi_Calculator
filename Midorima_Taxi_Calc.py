@@ -134,3 +134,12 @@ with st.expander("📋 計算の根拠"):
     else:
         st.write("10km以内のため配車手数料と初乗りを両方加算します。")
         st.write(f"式: ({real_dist} × {st.session_state.u_price}) + 配車料({applied_p_fee}) + 初乗り({applied_f_fee}) + チップ")
+
+st.subheader("📊 緑間タクシー 運行日報")
+if st.button("🔄 最新の履歴を読み込む"):
+    df_display, _ = get_csv_from_github()
+    if not df_display.empty:
+        # 最新の記録が上にくるようにソートして表示
+        st.dataframe(df_display.sort_values(by="timestamp", ascending=False), use_container_width=True)
+    else:
+        st.info("記録はありません。")
