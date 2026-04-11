@@ -42,7 +42,7 @@ if 'p_fee' not in st.session_state: st.session_state.p_fee = D_PICKUP_FEE
 if 'f_fee' not in st.session_state: st.session_state.f_fee = D_FIRST_FEE
 
 st.title("🚖 緑間タクシー 料金計算機")
-driver = st.radio("担当ドライバー", ["緑間理人", "緑間きのこ"], horizontal=True)
+driver = st.radio("担当ドライバー", ["緑間理人", "緑間きのこ","白黒つけ男"], horizontal=True)
 
 with st.expander("⚙️ 料金単価・手数料の一時設定"):
     st.session_state.u_price = st.number_input("1km単価 (円)", value=st.session_state.u_price, step=1000.0)
